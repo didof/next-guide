@@ -241,3 +241,250 @@ export default function List() {
 	)
 }
 ```
+
+---
+
+## Data Fetching with getInitialProps
+
+### Wrong Approach
+
+I create `pages/api/getPeople.js` like so:
+
+```js
+export default (req, res) => {
+	if (req.method !== 'GET') {
+		return res.status(403).end()
+	}
+
+	res.statusCode = 200
+	res.setHeader('Content-Type', 'application/json')
+
+	const people = [
+		{ id: 1, name: 'jonathan', country: 'UK', livesIn: 'UK' },
+		{ id: 3, name: 'joseph', country: 'UK', livesIn: 'USA' },
+		{ id: 5, name: 'jotaro', country: 'Japan', livesIn: 'Japan' },
+		{ id: 4, name: 'josuke', country: 'Japan', livesIn: 'Japan' },
+		{ id: 'brando', name: 'giorno', country: 'Japan', livesIn: 'Italy' },
+	]
+
+	return res.end(JSON.stringify(people))
+}
+```
+
+In a new page, `fetch.js` I use _isomorphic-unfetch_ to fetch the data from the API. I could also use _axios_ or _SWR_.
+
+```js
+import fetch from 'isomorphic-unfetch'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+
+const Fetch = () => {
+	const [persons, setPersons] = useState([])
+
+	useEffect(() => {
+		async function getPersons() {
+			const response = await fetch('http://localhost:3000/api/getPeople')
+			const json_response = await response.json()
+			setPersons(json_response)
+		}
+
+		getPersons()
+	}, [])
+
+	let list_persons = persons.map(({ id, name, country, livesIn }) => {
+		return (
+			<li key={id}>
+				<Link as={`/${country}/${name}`} href='/[country]/[person]'>
+					<button>details</button>
+				</Link>
+				{name}: born in {country}, now lives in {livesIn}
+			</li>
+		)
+	})
+
+	return (
+		<div>
+			<h1>Data Fetching with getInitialProps</h1>
+			<h2>List of persons fetched from API</h2>
+			<ul>{list_persons}</ul>
+		</div>
+	)
+}
+
+export default Fetch
+```
+
+The output is there, I obtained a list of persons fetched from the API.
+
+> But doing so **the fetching is appening on the client**. I can notice this refreshing the page and keeping an eye on the _Network_ tab in _devsTools_. It happens because when queryed of a page, _Next.js_ build it and send it; `useEffect()` output will be accessible in the next-time frame. Basically it will not even run in the server-side. This entails two main issues:
+
+- client (and **SEO crawler too**) receives a blank page and needs a subsequent fetch in order to populate with content
+- not taking advantage with the use of _Server-side Rendering_
+
+### Correct Approach
+
+```js
+import fetch from 'isomorphic-unfetch'
+import Link from 'next/link'
+
+const Fetch = ({ persons }) => {
+	let list_persons = persons.map(({ id, name, country, livesIn }) => {
+		return (
+			<li key={id}>
+				<Link as={`/${country}/${name}`} href='/[country]/[person]'>
+					<button>details</button>
+				</Link>
+				{name}: born in {country}, now lives in {livesIn}
+			</li>
+		)
+	})
+
+	return (
+		<div>
+			<h1>Data Fetching with getInitialProps</h1>
+			<h2>List of persons fetched from API</h2>
+			<ul>{list_persons}</ul>
+		</div>
+	)
+}
+
+export default Fetch
+
+Fetch.getInitialProps = async () => {
+	const response = await fetch('http://localhost:3000/api/getPeople')
+	const json_response = await response.json()
+	return { persons: json_response }
+}
+```
+
+What happens is that _Next.js_
+
+- checks if there is the static method `getInitialProps`
+- checks if receives a promise (**must** be _async_)
+- waits for the promise to be resolved
+- when this happens, passes what it's returned as props in the component
+
+> The component render once. The page is already populated when sent.
+> In the _devTools/Network_, there is no another call to fetching data. Pick _Preview_ tab and discover that Server-side Rendering is Powerfull.
+
+## Data Fetching with filters
+
+Now what if I want to filter the persons retrived by their country? I need to access the _context_ in the `getInitialProps` method. First of all I add in the _fetch.js_ file a link for the same API but with query params `?country=Japan`:
+
+```html
+<p>
+	Press <a href="http://localhost:3000/fetch?country=Japan">here</a> the link to
+	get only the Jojos that are born in Japan
+</p>
+```
+
+So I implement in the API the ability to filter for the param _country_:
+
+```js
+export default (req, res) => {
+	if (req.method !== 'GET') {
+		return res.status(403).end()
+	}
+
+	const people = [
+		{ id: 1, name: 'jonathan', country: 'UK', livesIn: 'UK' },
+		{ id: 3, name: 'joseph', country: 'UK', livesIn: 'USA' },
+		{ id: 5, name: 'jotaro', country: 'Japan', livesIn: 'Japan' },
+		{ id: 4, name: 'josuke', country: 'Japan', livesIn: 'Japan' },
+		{ id: 'brando', name: 'giorno', country: 'Japan', livesIn: 'Italy' },
+	]
+
+	let payload = people
+
+	if (req.query && req.query['country']) {
+		payload = people.filter((person) => {
+			return person.country === req.query.country
+		})
+	}
+
+	res.statusCode = 200
+	res.setHeader('Content-Type', 'application/json')
+
+	return res.end(JSON.stringify(payload))
+}
+```
+
+Finally I add the possibility to have params in the fetching made with `getInitialProps`. To achieve this result I need to access the _context_. One of its property is query:
+
+```js
+Fetch.getInitialProps = async (ctx) => {
+	const { query } = ctx
+
+	let url = 'http://localhost:3000/api/getPeople'
+
+	if (query.country) {
+		url += `?country=${query.country}`
+		if (query.livesIn) {
+			url += `&livesIn=${query.livesIn}`
+		}
+	}
+
+	const response = await fetch(url)
+	const json_response = await response.json()
+	return { persons: json_response }
+}
+```
+
+### Appendix - multiple params
+
+In the `fetch.js` file:
+
+```html
+<p>
+	Press <a href="http://localhost:3000/fetch">here</a> the link to get all the
+	Jojos
+</p>
+<p>
+	Press <a href="http://localhost:3000/fetch?country=Japan">here</a> the link to
+	get only the Jojos that are born in Japan
+</p>
+<p>
+	Press{' '}
+	<a href="http://localhost:3000/fetch?country=Japan&livesIn=Italy">here</a>{' '}
+	the link to get the only Jojo born in Japan but living in Italy
+</p>
+```
+
+while in the API a little change:
+
+```js
+if (req.query && req.query['country']) {
+	payload = people.filter((person) => {
+		return person.country === req.query.country
+	})
+
+	if (req.query['livesIn']) {
+		payload = payload.filter((person) => {
+			return person.livesIn === req.query.livesIn
+		})
+	}
+}
+```
+
+finally the `getInitialProps`:
+
+```js
+Fetch.getInitialProps = async (ctx) => {
+	const { query } = ctx
+
+	let url = 'http://localhost:3000/api/getPeople'
+
+	if (query.country) {
+		url += `?country=${query.country}`
+        if(query.livesIn) {
+            url += `&livesIn=${query.livesIn}`
+        }
+	}
+
+	const response = await fetch(url)
+	const json_response = await response.json()
+	return { persons: json_response }
+}
+```
+
+> This is actually a very bad way to do this. I will change this soon.
