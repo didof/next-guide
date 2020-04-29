@@ -1,15 +1,15 @@
 import { useRouter } from 'next/router'
 
-export default function Active({ children, href }) {
+export default function Active({ children, href, as }) {
     const router = useRouter()
 
     const handle_click = e => {
         e.preventDefault()
-        router.push(href)
+        router.push(href, as)
     }
 
     return (
-        <a href={href} onClick={handle_click}>
+        <a onClick={handle_click}>
             {children}
         </a>
     )

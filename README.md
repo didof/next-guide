@@ -8,14 +8,17 @@ The basic way in which I can route among my pages is via the next.js provided _L
 
 I create `pages/[country]/[person].js`. The basic _[person].js_ looks like:
 
-```
+```js
 import { useRouter } from 'next/router'
 
 export default function Person() {
+	const router = useRouter()
 
-    const router = useRouter()
-
-    return <h2>{router.query.person} lives in {router.query.country}</h2>
+	return (
+		<h2>
+			{router.query.person} lives in {router.query.country}
+		</h2>
+	)
 }
 ```
 
@@ -23,7 +26,7 @@ In case the URL is _/italy/frank_ the `console.log(router.query)` would return `
 
 Now I create a page containing a list from which I can access several pages, each one specific for a certain person. I create `pages/list.js` that look like below:
 
-```
+```js
 import Link from 'next/link'
 
 const fakeJsonResponse = [
@@ -35,10 +38,7 @@ const fakeJsonResponse = [
 export default function List() {
 	const list_link = fakeJsonResponse.map(({ id, name, country }) => (
 		<li key={id}>
-			<Link
-                href='/[country]/[person]'
-                as={`/${country}/${name}`}
-            >
+			<Link href='/[country]/[person]' as={`/${country}/${name}`}>
 				<a>{name}</a>
 			</Link>
 		</li>
@@ -70,28 +70,24 @@ I create `components/UI/Link/Active.js`. The reusable **Active** component needs
 - children: the link text the user will see and click
 - href: the path router needs to properly connect the link to the page
 
-```
+```js
 import { useRouter } from 'next/router'
 
-export default function Active({ children, href }) {
-    const router = useRouter()
+export default function Active({ children, href, as }) {
+	const router = useRouter()
 
-    const handle_click = e => {
-        e.preventDefault()
-        router.push(href)
-    }
+	const handle_click = (e) => {
+		e.preventDefault()
+		router.push(href, as)
+	}
 
-    return (
-        <a href={href} onClick={handle_click}>
-            {children}
-        </a>
-    )
+	return <a onClick={handle_click}>{children}</a>
 }
 ```
 
 So I update the previously created `list.js` file s below:
 
-```
+```js
 import Link from 'next/link'
 
 import ActiveLink from '../components/UI/Link/Active'
@@ -103,30 +99,19 @@ const fakeJsonResponse = [
 ]
 
 export default function List() {
-	const list_link = fakeJsonResponse.map(({ id, name, country }) => (
-		<li key={id}>
-			<Link
-                as={`/${country}/${name}`}
-                href='/[country]/[person]'
-            >
-				<a>{name}</a>
-			</Link>
-		</li>
 	))
 
 	const list_activeLink = fakeJsonResponse.map(({ id, name, country }) => (
 		<li key={id}>
-			<ActiveLink href={`/${country}/${name}`}>{name}</ActiveLink>
+			<ActiveLink as={`/${country}/${name}`} href='/[country]/[person]'>
+				{name}
+			</ActiveLink>
 		</li>
 	))
 
 	return (
 		<div>
 			<h1>List</h1>
-			<h2>Using Link tag</h2>
-			Navigate to:
-			<ul>{list_link}</ul>
-			<hr />
 			<h2>Using custom component</h2>
 			Navigate to:
 			<ul>
@@ -137,6 +122,122 @@ export default function List() {
 }
 ```
 
-Why should I prefer this method to the previous one?
-* separation of concerns + thinner code
-* possibility to set style directly into component
+> Why should I prefer this method to the previous one?
+
+- separation of concerns + thinner code
+- possibility to set style directly into component
+
+---
+
+### Approach #3 - via Router API
+
+The use of this method allows to implement some more advanced features such as router event.
+
+Directly into `list.js` file I make the following changes:
+
+```js
+import Link from 'next/link'
+import Router from 'next/router'
+
+import ActiveLink from '../components/UI/Link/Active'
+
+const fakeJsonResponse = [
+	{ id: 1, country: 'UK', name: 'Bruno' },
+	{ id: 2, country: 'Italy', name: 'Frank' },
+	{ id: 3, country: 'nowhere', name: 'John' },
+]
+
+export default function List() {
+	const handle_route = (name, country) => {
+		return () => {
+			const href = '/[country]/[person]'
+			const as = `/${country}/${name}`
+
+			return Router.push(href, as)
+		}
+	}
+
+	const list_routerLink = fakeJsonResponse.map(({ id, name, country }) => (
+		<li key={id}>
+			<span onClick={handle_route(name, country)}>{name}</span>
+		</li>
+	))
+
+	return (
+		<div>
+			<h1>List</h1>
+			<h2>Using Router API</h2>
+			Navigate to:
+			<ul>{list_routerLink}</ul>
+		</div>
+	)
+}
+```
+
+Using `Router.push([href [, as]])` will add a new URL entry into the _history stack_. So, if I press the _go back_ button of my browser, I will land on the previous page (_list.js_). If I want to prevent this from appening I can use `Router.replace([href [, as]])`; in this case, pressing the button will redirect me to `/`.
+
+> Why should I prefer this method over the others?
+
+- possibility to interact with the _history stack_
+- possibility to implement Router.events (see below)
+
+#### appendix #3.1 - Router.events
+
+The appropriate use requires that events should be registered when a component mounts, so I will use `useEffect`:
+
+```js
+import Link from 'next/link'
+import Router from 'next/router'
+
+import ActiveLink from '../components/UI/Link/Active'
+
+const fakeJsonResponse = [
+	{ id: 1, country: 'UK', name: 'Bruno' },
+	{ id: 2, country: 'Italy', name: 'Frank' },
+	{ id: 3, country: 'nowhere', name: 'John' },
+]
+
+export default function List() {
+	const handle_route = (name, country) => {
+		return () => {
+			const href = '/[country]/[person]'
+			const as = `/${country}/${name}`
+
+			return Router.push(href, as)
+		}
+	}
+
+	const list_routerLink = fakeJsonResponse.map(({ id, name, country }) => (
+		<li key={id}>
+			<span onClick={handle_route(name, country)}>{name}</span>
+		</li>
+	))
+
+	useEffect(() => {
+		const handle_routeChangeStart = (url) => {
+			console.log('> App is changing to:', url)
+		}
+
+		const handle_routeChangeComplete = (url) => {
+			console.log('> Successfully redirected to:', url)
+		}
+
+		Router.events.on('routeChangeStart', handle_routeChangeStart)
+		Router.events.on('routeChangeComplete', handle_routeChangeComplete)
+
+		return () => {
+			Router.events.off('routeChangeStart', handle_routeChangeStart)
+			Router.events.off('routeChangeComplete', handle_routeChangeComplete)
+		}
+	})
+
+	return (
+		<div>
+			<h1>List</h1>
+			<h2>Using Router API</h2>
+			Navigate to:
+			<ul>{list_routerLink}</ul>
+		</div>
+	)
+}
+```
