@@ -5,12 +5,16 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "mock-server": "json-server --watch ./db.json -p 4001 -d 3000"
   },
   "dependencies": {
     "isomorphic-unfetch": "^3.0.0",
     "next": "9.3.6",
     "react": "16.13.1",
     "react-dom": "16.13.1"
+  },
+  "devDependencies": {
+    "json-server": "^0.16.1"
   }
 }

@@ -1,0 +1,22 @@
+{
+    "books": [
+        {
+            "id": 618,
+            "title": "Trouble with lichen",
+            "printed": 1973,
+            "author": "John Wyndham"
+        },
+        {
+            "id": 562,
+            "title": "City pf the Clasch",
+            "printed": 1971,
+            "author": "Jack Vance"
+        },
+        {
+            "id": 529,
+            "title": "World without starts",
+            "printed": 1969,
+            "author": "Poul Andreson"
+        }
+    ]
+}
